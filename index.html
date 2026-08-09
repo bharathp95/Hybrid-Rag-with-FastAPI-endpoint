@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Resume RAG Q&A</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.2/marked.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      background: #ff9500;
+      background: linear-gradient(90deg, rgba(255, 149, 0, 1) 0%, rgba(106, 9, 121, 1) 53%, rgba(0, 212, 255, 1) 100%);
+      font-family: -apple-system, "Segoe UI", sans-serif;
+      width: 100vw;
+      min-height: 100vh;
+      margin: 0;
+      padding: 6vh 5vw;
+      color: #1a1a1a;
+    }
+
+    h1 {
+      font-weight: 600;
+      margin-bottom: 1vmin;
+      color: #ffffff;
+      font-size: 6vmin;
+    }
+    p.subtitle {
+      color: #ffffff;
+      margin-top: 0;
+      font-size: 3vmin;
+      margin-bottom: 4vh;
+    }
+
+    textarea {
+      color: aliceblue;
+      width: 100%;
+      height: 16vh;
+      padding: 3vmin;
+      font-size: 3.6vmin;
+      border: 1px solid #ffffff99;
+      border-radius: 2.5vmin;
+      resize: vertical;
+      font-family: inherit;
+      background: linear-gradient(90deg, rgba(255, 189, 103, 0.641) 0%, rgba(205, 134, 218, 0.719) 53%, rgba(154, 222, 235, 0.692) 100%);
+    }
+    textarea:focus { outline: none; border-color: #6366f1; }
+
+    button {
+      margin-top: 2vh;
+      padding: 2vh 6vw;
+      background: #0808085d;
+      color: white;
+      border: none;
+      border-radius: 2vmin;
+      font-size: 3.6vmin;
+      cursor: pointer;
+      width: 100%;
+    }
+    button:hover { background: #4f46e5; }
+    button:disabled { background: #aaa; cursor: not-allowed; }
+
+    #answer {
+      margin-top: 3vh;
+      background: white;
+      border: 1px solid #eee;
+      border-radius: 2.5vmin;
+      padding: 4vmin 5vmin;
+      line-height: 1.6;
+      font-size: 3.4vmin;
+      display: none;
+    }
+    #answer table { border-collapse: collapse; width: 100%; margin: 2vh 0; font-size: 3vmin; }
+    #answer th, #answer td { border: 1px solid #ddd; padding: 1.5vmin 2vmin; text-align: left; }
+    #answer th { background: #f2f2f7; }
+    #answer code { background: #f2f2f7; padding: 0.5vmin 1vmin; border-radius: 1vmin; }
+
+    /* On wider screens (tablet/desktop), cap the width so it doesn't stretch too wide */
+    @media (min-width: 600px) {
+      body {
+        max-width: 680px;
+        margin: 0 auto;
+        padding: 6vh 4vmin;
+      }
+      h1 { font-size: 28px; }
+      p.subtitle { font-size: 14px; }
+      textarea { font-size: 15px; height: 90px; }
+      button { font-size: 15px; width: auto; padding: 10px 22px; }
+      #answer { font-size: 15px; }
+      #answer table { font-size: 14px; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Chat with my Resume</h1>
+  <p class="subtitle">Hybrid RAG (BM25 + Chroma) — powered by FastAPI</p>
+
+  <textarea id="question" placeholder="Ask something..."></textarea>
+  <br>
+  <button id="askBtn" onclick="askQuestion()">Ask</button>
+
+  <div id="answer"></div>
+
+  <script>
+    async function askQuestion() {
+      const question = document.getElementById("question").value.trim();
+      if (!question) return;
+
+      const btn = document.getElementById("askBtn");
+      const answerDiv = document.getElementById("answer");
+
+      btn.disabled = true;
+      btn.textContent = "Thinking...";
+      answerDiv.style.display = "block";
+      answerDiv.textContent = "Thinking...";
+
+      try {
+        const response = await fetch("http://localhost:8000/ask", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: question })
+        });
+
+        const data = await response.json();
+        answerDiv.innerHTML = marked.parse(data.answer);
+      } catch (err) {
+        answerDiv.textContent = "Something went wrong: " + err.message;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Ask";
+      }
+    }
+  </script>
+</body>
+</html>

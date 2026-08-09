@@ -1,0 +1,6 @@
+venv/
+__pycache__/
+*.pyc
+.env
+fastapi_basics1.pdf
+fastapi_hybrid_rag_walkthrough.ipynb
