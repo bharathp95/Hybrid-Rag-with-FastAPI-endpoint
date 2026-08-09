@@ -1,4 +1,5 @@
 langchain-huggingface
+griffe<1.0
 openai==0.28.1
 guardrails-ai
 aiohappyeyeballs==2.7.1
