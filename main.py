@@ -80,7 +80,7 @@ def build_retriever():
     chunks = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50).split_text(text)
 
     embeddings = HuggingFaceEndpointEmbeddings(
-        model="sentence-transformers/all-MiniLM-L6-v2",
+        model="sentence-transformers/all-MiniLM-L12-v2",
         huggingfacehub_api_token=os.environ["HF_TOKEN"]
     )
     vectorstore = Chroma.from_texts(texts=chunks, embedding=embeddings)
