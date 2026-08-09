@@ -1,4 +1,5 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
 import fitz
@@ -27,26 +28,30 @@ class AskResponse(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("Server starting... building retriever now")
-    app.state.retriever = build_retriever()   # ADDITION 1
+    app.state.retriever = build_retriever()
     app.state.chain = build_chain()
     yield
     print("Server shutting down")
 
-app = FastAPI(lifespan=lifespan)   # only ONE FastAPI() now, with lifespan attached
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],   # for local dev; lock this down later
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-@app.get("/check")   # ADDITION 2 — new test endpoint
+@app.get("/")
+def serve_frontend():
+    return FileResponse("index.html")
+
+
+@app.get("/check")
 def check():
     return {"retriever_type": str(type(app.state.retriever))}
 
-from fastapi import Request
 
 @app.post("/ask", response_model=AskResponse)
 def ask(question: Question, request: Request):
@@ -66,7 +71,7 @@ def ask(question: Question, request: Request):
     )
 
 
-RESUME_PATH = "Bharath_P_Resume.pdf"   # <-- put your resume pdf in the same folder, or give full path
+RESUME_PATH = "Bharath_P_Resume.pdf"
 
 def build_retriever():
     doc = fitz.open(RESUME_PATH)
@@ -84,7 +89,6 @@ def build_retriever():
     return EnsembleRetriever(retrievers=[bm25, chroma], weights=[0.5, 0.5])
 
 
-
 def build_chain():
     llm = ChatGroq(api_key=os.environ["GROQ_API_KEY"], model="openai/gpt-oss-120b")
     prompt = ChatPromptTemplate.from_messages([
@@ -92,4 +96,3 @@ def build_chain():
         ("human", "Context:\n{context}\n\nQuestion: {question}")
     ])
     return prompt | llm | StrOutputParser()
-
