@@ -74,7 +74,7 @@ def build_retriever():
 
     chunks = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50).split_text(text)
 
-    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L12-v2")
+    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     vectorstore = Chroma.from_texts(texts=chunks, embedding=embeddings)
 
     bm25 = BM25Retriever.from_texts(chunks)
