@@ -74,7 +74,6 @@
     #answer th { background: #f2f2f7; }
     #answer code { background: #f2f2f7; padding: 0.5vmin 1vmin; border-radius: 1vmin; }
 
-    /* On wider screens (tablet/desktop), cap the width so it doesn't stretch too wide */
     @media (min-width: 600px) {
       body {
         max-width: 680px;
@@ -114,7 +113,7 @@
       answerDiv.textContent = "Thinking...";
 
       try {
-        const response = await fetch("https://hybrid-rag-with-fastapi-endpoint.onrender.com", {
+        const response = await fetch("/ask", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text: question })
