@@ -37,11 +37,10 @@ app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["https://hybrid-rag-with-fastapi-endpoint.onrender.com"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 @app.get("/")
 def serve_frontend():
