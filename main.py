@@ -92,14 +92,29 @@ class AskResponse(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("Configuring Guardrails Hub...")
-    subprocess.run(
-        ["guardrails", "configure", "--token", os.environ["GUARDRAILS_TOKEN"], "--disable-metrics"],
-        check=True
-    )
-    subprocess.run(
-        ["guardrails", "hub", "install", "hub://guardrails/restrict_to_topic"],
-        check=True
-    )
+    try:
+        result = subprocess.run(
+            ["guardrails", "configure", "--token", os.environ["GUARDRAILS_TOKEN"], "--disable-metrics"],
+            check=True, capture_output=True, text=True
+        )
+        print(result.stdout)
+    except subprocess.CalledProcessError as e:
+        print("guardrails configure FAILED")
+        print("stdout:", e.stdout)
+        print("stderr:", e.stderr)
+        raise
+
+    try:
+        result = subprocess.run(
+            ["guardrails", "hub", "install", "hub://guardrails/restrict_to_topic"],
+            check=True, capture_output=True, text=True
+        )
+        print(result.stdout)
+    except subprocess.CalledProcessError as e:
+        print("guardrails hub install FAILED")
+        print("stdout:", e.stdout)
+        print("stderr:", e.stderr)
+        raise
     print("Guardrails Hub ready. Building input guard...")
     from guardrails import Guard, OnFailAction
     from guardrails.hub import RestrictToTopic
