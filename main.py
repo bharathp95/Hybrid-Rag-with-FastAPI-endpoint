@@ -3,7 +3,6 @@ from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from contextlib import asynccontextmanager
-import subprocess
 import fitz
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_chroma import Chroma
@@ -17,17 +16,10 @@ from langchain_core.output_parsers import StrOutputParser
 from dotenv import load_dotenv
 load_dotenv()
 
-# ---------------------------------------------------------------------------
-# GUARDRAILS SETUP
-# ---------------------------------------------------------------------------
-# NOTE: guardrails and the RestrictToTopic validator are installed at runtime
-# inside lifespan() (see below), since the Hub package isn't available until
-# `guardrails hub install` has run. input_guard is built there too, and
-# stored on app.state so is_safe_input() can reach it.
+
+
 
 REFUSAL_MSG = "I can only answer questions about Bharath's resume."
-
-VALID_TOPICS = ["resume", "skills", "experience", "education", "projects", "work history"]
 
 # Simple deterministic pattern check for common injection phrasing — no model
 # download, near-zero latency. Not exhaustive, but catches the common cases
@@ -52,12 +44,21 @@ def has_injection_pattern(text: str) -> bool:
     return any(pattern in lowered for pattern in INJECTION_PATTERNS)
 
 
-def is_safe_input(user_question: str, input_guard) -> tuple[bool, str]:
+def is_on_topic(question: str, vectorstore, threshold: float = 0.3) -> bool:
+    """
+    Topic gate: checks whether the question is actually similar to something
+    in the resume, using Chroma's own relevance scores. Off-topic questions
+    ('what's the weather', 'write me a poem') score low and get refused
+    before ever reaching the LLM.
+    """
     try:
-        input_guard.validate(user_question)
-        return True, ""
+        results = vectorstore.similarity_search_with_relevance_scores(question, k=3)
     except Exception as e:
-        return False, str(e)
+        print(f"[guardrails] similarity check failed, failing safe: {e}")
+        return False
+    if not results:
+        return False
+    return max(score for _, score in results) >= threshold
 
 
 def is_grounded(answer: str, context: str, threshold: float = 0.15) -> bool:
@@ -91,45 +92,8 @@ class AskResponse(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("Configuring Guardrails Hub...")
-    try:
-        result = subprocess.run(
-            ["guardrails", "configure", "--token", os.environ["GUARDRAILS_TOKEN"], "--disable-metrics"],
-            check=True, capture_output=True, text=True
-        )
-        print(result.stdout)
-    except subprocess.CalledProcessError as e:
-        print("guardrails configure FAILED")
-        print("stdout:", e.stdout)
-        print("stderr:", e.stderr)
-        raise
-
-    try:
-        result = subprocess.run(
-            ["guardrails", "hub", "install", "hub://guardrails/restrict_to_topic"],
-            check=True, capture_output=True, text=True
-        )
-        print(result.stdout)
-    except subprocess.CalledProcessError as e:
-        print("guardrails hub install FAILED")
-        print("stdout:", e.stdout)
-        print("stderr:", e.stderr)
-        raise
-    print("Guardrails Hub ready. Building input guard...")
-    from guardrails import Guard, OnFailAction
-    from guardrails.hub import RestrictToTopic
-
-    app.state.input_guard = Guard().use_many(
-        RestrictToTopic(
-            valid_topics=VALID_TOPICS,
-            disable_classifier=False,
-            disable_llm=False,
-            on_fail=OnFailAction.EXCEPTION,
-        ),
-    )
-
-    print("Building retriever now...")
-    app.state.retriever = build_retriever()
+    print("Server starting... building retriever now")
+    app.state.vectorstore, app.state.retriever = build_retriever()
     app.state.chain = build_chain()
     yield
     print("Server shutting down")
@@ -166,10 +130,9 @@ def ask(question: Question, request: Request):
         print("[guardrails] blocked input: matched injection pattern")
         return AskResponse(answer=REFUSAL_MSG, question_length=len(q_text))
 
-    # ---- LAYER 1b: topic guardrail ----
-    safe, reason = is_safe_input(q_text, request.app.state.input_guard)
-    if not safe:
-        print(f"[guardrails] blocked input: {reason}")
+    # ---- LAYER 1b: topic gate (similarity score against resume content) ----
+    if not is_on_topic(q_text, request.app.state.vectorstore):
+        print("[guardrails] blocked input: off-topic (low similarity score)")
         return AskResponse(answer=REFUSAL_MSG, question_length=len(q_text))
 
     retriever = request.app.state.retriever
@@ -211,7 +174,8 @@ def build_retriever():
     bm25.k = 5
     chroma = vectorstore.as_retriever(search_kwargs={"k": 5})
 
-    return EnsembleRetriever(retrievers=[bm25, chroma], weights=[0.5, 0.5])
+    ensemble = EnsembleRetriever(retrievers=[bm25, chroma], weights=[0.5, 0.5])
+    return vectorstore, ensemble
 
 
 def build_chain():
